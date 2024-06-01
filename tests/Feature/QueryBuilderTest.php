@@ -34,6 +34,7 @@ class QueryBuilderTest extends TestCase
             "id" => "FOOD",
             "name" => "Food"
         ]);
+        // insert into `categories` (`id`, `name`) values (?, ?)
 
         $result = DB::select("select count(id) as total from categories");
         self::assertEquals(2, $result[0]->total);
@@ -51,6 +52,7 @@ class QueryBuilderTest extends TestCase
         $this->testInsert();
 
         $collection = DB::table("categories")->select(["id", "name"])->get();
+        // select * from `categories` where (`id` = ? or `id` = ?)
         self::assertNotNull($collection);
 
         $collection->each(function ($item) {
@@ -116,6 +118,7 @@ class QueryBuilderTest extends TestCase
         $collection = DB::table("categories")
             ->whereBetween("created_at", ["2020-09-10 10:10:10", "2020-11-10 10:10:10"])
             ->get();
+        // select * from `categories` where `created_at` between ? and ?
 
         self::assertCount(4, $collection);
         $collection->each(function ($item) {
@@ -129,6 +132,7 @@ class QueryBuilderTest extends TestCase
         $this->insertCategories();
 
         $collection = DB::table("categories")->whereIn("id", ["SMARTPHONE", "LAPTOP"])->get();
+        // select * from `categories` where `id` in (?, ?)
 
         self::assertCount(2, $collection);
         $collection->each(function ($item) {
@@ -144,6 +148,7 @@ class QueryBuilderTest extends TestCase
 
         $collection = DB::table("categories")
             ->whereNull("description")->get();
+        // select * from `categories` where `description` is null
 
         self::assertCount(4, $collection);
         $collection->each(function ($item) {
@@ -161,6 +166,7 @@ class QueryBuilderTest extends TestCase
 
         $collection = DB::table("categories")
             ->whereDate("created_at", "2020-10-10")->get();
+        // select * from `categories` where date(`created_at`) = ?
 
         self::assertCount(4, $collection);
         $collection->each(function ($item) {
@@ -178,6 +184,7 @@ class QueryBuilderTest extends TestCase
         DB::table("categories")->where("id", "=", "SMARTPHONE")->update([
             "name" => "Handphone"
         ]);
+        // update `categories` set `name` = ? where `id` = ?
 
         $collection = DB::table("categories")->where("name", "=", "Handphone")->get();
         self::assertCount(1, $collection);
@@ -199,6 +206,8 @@ class QueryBuilderTest extends TestCase
             "description" => "Ticket and Voucher",
             "created_at" => "2020-10-10 10:10:10"
         ]);
+        // select exists(select * from `categories` where (`id` = ?)) as `exists`
+        // insert into `categories` (`id`, `name`, `description`, `created_at`) values (?, ?, ?, ?)
 
         $collection = Db::table("categories")->where("id", "=", "VOUCHER")->get();
         self::assertCount(1, $collection);
@@ -214,6 +223,7 @@ class QueryBuilderTest extends TestCase
     public function testIncrement()
     {
         DB::table("counters")->where("id", "=", "sample")->increment("counter", 1);
+        // update `counters` set `counter` = `counter` + 1 where `id` = ?
 
         $collection = DB::table("counters")->where('id', '=', 'sample')->get();
         self::assertCount(1, $collection);
@@ -231,6 +241,7 @@ class QueryBuilderTest extends TestCase
         $this->insertCategories();
 
         DB::table("categories")->where('id', '=', 'SMARTPHONE')->delete();
+        // delete from `categories` where `id` = ?
 
         $collection = DB::table("categories")->where("id", "=", "SMARTPHONE")->get();
         self::assertCount(0, $collection);
@@ -277,4 +288,200 @@ class QueryBuilderTest extends TestCase
             Log::info(json_encode($item));
         });
     }
+
+
+    // Query Ordering (mengurutkan data)
+    // orderBy(column, order) --> aroder bisa berupa asc(ascending) atau desc(descending), defaultnya ascending jika tidak disebutkan
+    public function testOrdering()
+    {
+        $this->insertProducts();
+
+        $collection = DB::table("products")->whereNotNull("id")
+            ->orderBy("price", "desc")->orderBy("name", "asc")->get();
+        //select * from `products` where `id` is not null order by `price` desc, `name` asc
+
+        self::assertCount(2, $collection);
+        $collection->each(function ($item) {
+            Log::info(json_encode($item));
+        });
+    }
+
+
+    // Query Paging
+    // take(number) --> untuk melakukan LIMIT
+    // skip(number) --> untuk melakukan OFFSET
+    public function testPaging()
+    {
+        $this->insertCategories();
+
+        $collection = DB::table("categories")
+            ->skip(0)
+            ->take(2)
+            ->get();
+        // select * from `categories` limit 2 offset 0
+
+        self::assertCount(2, $collection);
+        $collection->each(function ($item) {
+            Log::info(json_encode($item));
+        });
+    }
+
+
+    public function insertManyCategories()
+    {
+        for ($i = 0; $i < 100; $i++) {
+            DB::table("categories")->insert([
+                "id" => "CATEGORY-$i",
+                "name" => "Category $i",
+                "created_at" => "2020-10-10 10:10:10"
+            ]);
+        }
+    }
+
+
+    // Chunk (memotong data hasil query secara bertahap agar query yang di load tidak membuat out of memory, harus menambhakan ordering pada query nya)
+    // chunk(number, callback) --> dimana number ada jumlah data yang ingin diambil
+    public function testChunk()
+    {
+        $this->insertManyCategories();
+
+        DB::table("categories")->orderBy("id")
+            ->chunk(10, function ($categories) {
+                self::assertNotNull($categories);
+                Log::info("Start Chunk");
+                $categories->each(function ($category) {
+                    Log::info(json_encode($category));
+                });
+                Log::info("End Chunk");
+            });
+        // select * from `categories` order by `id` asc limit 10 offset 0
+        // akan mengambil data berulang dimana dalam sekali pengambilan mengambil 10 data
+    }
+
+
+    // Lazy Result (mirip seperti chunk, namun tidak akan dieksekusi jika tidak diperlukan, namun akan mengembalikan lazyCollection)
+    // lazy(number)
+    public function testLazy()
+    {
+        $this->insertManyCategories();
+
+        $collection = DB::table("categories")->orderBy("id")->lazy(10)->take(3); // chunk lazy(10) akan dieksekusi karena dibutuhkan pada take(3)
+        // select * from `categories` order by `id` asc limit 10 offset 0
+        self::assertNotNull($collection);
+
+        $collection->each(function ($item) {
+            Log::info(json_encode($item));
+        });
+    }
+
+
+    // Cursor (chunk dan lazy melakukan sebenarnya paging dibelakang layar, sedangkan cursor hanya akan melakukan query satu kali)
+    // Cursor mengambil datanya satu persatu menggunakan PDO::fetch()
+    // secara penggunaan memory, cursor akan lebih hemat dibandingkan dengan chunk atau lazy, namun cursor bisa lebih lambat karena satu persatu
+    // cursor() --> tidak perlu menentukan jumlah setiap pengambilan data, karena hanya akan mengambil satu data
+    public function testCursor()
+    {
+        $this->insertManyCategories();
+
+        $collection = DB::table("categories")->orderBy("id")->cursor();
+        // select * from `categories` order by `id` asc
+        // lalu data akan diambil satu persatu
+        self::assertNotNull($collection);
+
+        $collection->each(function ($item) {
+            Log::info(json_encode($item));
+        });
+    }
+
+
+    // Agregate
+    // count(column) --> untuk mengambil jumlah data
+    // min(column) --> untuk mengambil minimal data
+    // max(column) --> untuk mengambil maksimal data
+    // avg(column) --> untuk mengambil rata-rata data
+    // sum(column) --> untuk menjumlahkan data
+    public function testAggregate()
+    {
+        $this->insertProducts();
+
+        $result = DB::table("products")->count("id");
+        // select count(`id`) as aggregate from `products`
+        self::assertEquals(2, $result);
+
+        $result = DB::table("products")->min("price");
+        // select min(`price`) as aggregate from `products`
+        self::assertEquals(18000000, $result);
+
+        $result = DB::table("products")->max("price");
+        // select max(`price`) as aggregate from `products`
+        self::assertEquals(20000000, $result);
+
+        $result = DB::table("products")->avg("price");
+        // select avg(`price`) as aggregate from `products`
+        self::assertEquals(19000000, $result);
+
+        $result = DB::table("products")->sum("price");
+        // select sum(`price`) as aggregate from `products`
+        self::assertEquals(38000000, $result);
+    }
+
+
+    // Query Builder Raw (kombinasi dari query builder dengan raw query)
+    // DB::raw(query)
+    public function testQueryBuilderRaw()
+    {
+        $this->insertProducts();
+
+        $collection = DB::table("products")
+            ->select(
+                DB::raw("count(id) as total_product"),
+                DB::raw("min(price) as min_price"),
+                DB::raw("max(price) as max_price"),
+            )->get();
+        // select count(id) as total_product, min(price) as min_price, max(price) as max_price from `products`
+
+        self::assertEquals(2, $collection[0]->total_product);
+        self::assertEquals(18000000, $collection[0]->min_price);
+        self::assertEquals(20000000, $collection[0]->max_price);
+    }
+
+
+    public function insertProductFood()
+    {
+        DB::table("products")->insert([
+            "id" => "3",
+            "name" => "Bakso",
+            "category_id" => "FOOD",
+            "price" => 20000
+        ]);
+        DB::table("products")->insert([
+            "id" => "4",
+            "name" => "Mie Ayam",
+            "category_id" => "FOOD",
+            "price" => 20000
+        ]);
+    }
+
+
+    // Grouping
+    // groupBy(column) --> melakukan group sesuai dengan variasi value yang ada di column yg ditentukan
+    public function testGroupBy()
+    {
+        $this->insertProducts();
+        $this->insertProductFood();
+
+        $collection = DB::table("products")
+            ->select("category_id", DB::raw("count(*) as total_product"))
+            ->groupBy("category_id")
+            ->orderBy("category_id", "desc")
+            ->get();
+        // select `category_id`, count(*) as total_product from `products` group by `category_id` order by `category_id` desc
+
+        self::assertCount(2, $collection);
+        self::assertEquals("SMARTPHONE", $collection[0]->category_id);
+        self::assertEquals("FOOD", $collection[1]->category_id);
+        self::assertEquals(2, $collection[0]->total_product);
+        self::assertEquals(2, $collection[1]->total_product);
+    }
+
 }

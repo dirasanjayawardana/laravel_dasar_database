@@ -501,4 +501,96 @@ class QueryBuilderTest extends TestCase
         self::assertCount(0, $collection);
     }
 
+
+    // Query Builder Locking (mengendalikan akses ke data dalam database oleh beberapa transaksi secara bersamaan)
+    // lockForUpdate() --> menambhakan perintah FOR UPDATE ke database untuk melakukan locking
+    // Menyatakan bahwa baris yang dipilih oleh query tersebut harus dikunci untuk update. Ini berarti bahwa baris yang dipilih akan diberikan lock eksklusif (exclusive lock) sehingga tidak ada transaksi lain yang bisa membaca atau menulis ke baris tersebut sampai lock dilepaskan.
+    public function testLocking()
+    {
+        $this->insertProducts();
+
+        DB::transaction(function () {
+            $collection = DB::table("products")
+                ->where('id', '=', '1')
+                ->lockForUpdate()
+                ->get();
+            // select * from `products` where `id` = ? for update
+
+            self::assertCount(1, $collection);
+        });
+    }
+
+
+    // Pagination
+    // paginate(perPage, columns, pageName, page) --> akan mnegembalikan object LengthAwarePaginator
+    public function testPagination()
+    {
+        $this->insertCategories();
+
+        $paginate = DB::table("categories")->paginate(perPage: 2, page: 2);
+        // select count(*) as aggregate from `categories`
+        // select * from `categories` limit 2 offset 2
+
+        self::assertEquals(2, $paginate->currentPage());
+        self::assertEquals(2, $paginate->perPage());
+        self::assertEquals(2, $paginate->lastPage());
+        self::assertEquals(4, $paginate->total());
+
+        $collection = $paginate->items();
+        self::assertCount(2, $collection);
+        foreach ($collection as $item) {
+            Log::info(json_encode($item));
+        }
+    }
+    // Iterasi per Page (mirip seperti chunk, namun dilakukan manual)
+    public function testIterateAllPagination()
+    {
+        $this->insertCategories();
+
+        $page = 1;
+
+        while (true) {
+            $paginate = DB::table("categories")->paginate(perPage: 2, page: $page);
+
+            if ($paginate->isEmpty()) {
+                break;
+            } else {
+                $page++;
+
+                $collection = $paginate->items();
+                self::assertCount(2, $collection);
+                foreach ($collection as $item) {
+                    Log::info(json_encode($item));
+                }
+            }
+        }
+    }
+
+
+    // Problem ketika melakukan LIMIT dan OFFSET pada data yg besar, semakin banyak data yg harus di OFFSET atau skip, maka bisa menjadi semakin lambat, salah satu solusinya dengan SEARCH AFTER, dimana tidak menggunakan nomor page lagi, melainkan menampilkan data setelah data terakhir yang kita lihat, dengan cara selalu merubah querynya sesuai dengan kondisi, seperti menggunakan WHERE bukan menggunakan LIMIT dan OFFSET
+    // Kekurangan SEARCH AFTER adalah kita tidak bisa loncat dari satu page ke page lain, karena querynya selalu berubah, sehingga harus bertahap
+    // Cursor Pagination harus melakukan sort dan filter berdasarkan salah satu kolom yg unique
+    // cursorPaginate() --> untuk melakukan SEARCH AFTER, hasil dari method ini adalah object CursorPAginator, kita tidak bisa tau berapa jumlah datanya
+    public function testCursorPagination()
+    {
+        $this->insertCategories();
+
+        $cursor = "id";
+        while (true) {
+            $paginate = DB::table("categories")->orderBy("id")->cursorPaginate(perPage: 2, cursor: $cursor);
+            // select * from `categories` order by `id` asc limit 3
+            // select * from `categories` where (`id` > ?) order by `id` asc limit 3
+            // perPage dibuat 2 namun limit pada query menjadi 3, itu karena mekanisme dari laravel untuk mengetahui apakah ada nextPage atau tidak
+
+            foreach ($paginate->items() as $item) {
+                self::assertNotNull($item);
+                Log::info(json_encode($item));
+            }
+
+            $cursor = $paginate->nextCursor();
+            if ($cursor == null) {
+                break;
+            }
+        }
+    }
 }

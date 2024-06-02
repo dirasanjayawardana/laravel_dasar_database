@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use Database\Seeders\CategorySeeder;
+use Database\Seeders\CounterSeeder;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -17,7 +19,7 @@ class QueryBuilderTest extends TestCase
         parent::setUp();
         DB::delete("delete from products");
         DB::delete("delete from categories");
-        // DB::delete("delete from counters");
+        DB::delete("delete from counters");
     }
 
     // Query Insert
@@ -63,26 +65,8 @@ class QueryBuilderTest extends TestCase
 
     public function insertCategories()
     {
-        DB::table("categories")->insert([
-            "id" => "SMARTPHONE",
-            "name" => "Smartphone",
-            "created_at" => "2020-10-10 10:10:10"
-        ]);
-        DB::table("categories")->insert([
-            "id" => "FOOD",
-            "name" => "Food",
-            "created_at" => "2020-10-10 10:10:10"
-        ]);
-        DB::table("categories")->insert([
-            "id" => "LAPTOP",
-            "name" => "Laptop",
-            "created_at" => "2020-10-10 10:10:10"
-        ]);
-        DB::table("categories")->insert([
-            "id" => "FASHION",
-            "name" => "Fashion",
-            "created_at" => "2020-10-10 10:10:10"
-        ]);
+        // memanggil seed CategorySeeder untuk melakukan seeding (melakukan perubahan (insert, update, delete) data di database)
+        $this->seed(CategorySeeder::class);
     }
 
 
@@ -222,6 +206,8 @@ class QueryBuilderTest extends TestCase
     // decrement(column, jumlahDecrement) --> melakukan decrement
     public function testIncrement()
     {
+        $this->seed(CounterSeeder::class);
+
         DB::table("counters")->where("id", "=", "sample")->increment("counter", 1);
         // update `counters` set `counter` = `counter` + 1 where `id` = ?
 

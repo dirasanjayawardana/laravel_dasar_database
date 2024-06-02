@@ -19,8 +19,8 @@
 - Secara otomatis akan dibuatkan file PHP yang digunakan untuk melakukan peruahan schema di databse di folder database/migrations
 - Untuk membuat perubahan schema, kita bisa menggunakan Schema Builder, tidak perlu menggunakan SQL lagi
 - Dengan menggunakan Schema Builder tidak perlu khawatir akan menggunakan database apa, akan otomatis disesuaikan
-`php artisan make:migration create_table_counter`
-`php artisan make:migration create_table_category`
+`php artisan make:migration create_table_counter` <br>
+`php artisan make:migration create_table_category` <br>
 `php artisan make:migration create_table_product`
 
 ### Menjalankan Migration

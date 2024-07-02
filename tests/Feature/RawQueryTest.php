@@ -9,6 +9,7 @@ use Tests\TestCase;
 
 class RawQueryTest extends TestCase
 {
+    // DB::connection('nama_db_config') --> memilih configurasi database yg diinginkan, ada di config/database.php
     // DB::insert(sql, array): bool --> melakukan insert data
     // DB::update(sql, array): int --> melakukan update data
     // DB::delete(sql, array): int --> melakukan delete data
